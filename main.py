@@ -136,21 +136,29 @@ ALLERGY_INFO = {
 def extract_allergy_numbers(menu_text):
     """
     메뉴 텍스트에서 알레르기 번호를 추출합니다.
+    예: '우렁된장찌개 (5.6.9)' -> {'5', '6', '9'}
     예: '돈까스1.5.6.10' -> {'1', '5', '6', '10'}
     """
 
     if not menu_text:
         return set()
 
-    numbers = re.findall(
+    # 괄호 안의 숫자.숫자.숫자 형태: (5.6.9)
+    bracket_numbers = re.findall(r"\(([\d.]+)\)", menu_text)
+
+    # 괄호 없이 음식명 뒤에 바로 붙는 형태: 돈까스1.5.6.10
+    inline_numbers = re.findall(
         r"(?<=[가-힣a-zA-Z\)\]])(\d{1,2}(?:\.\d{1,2})*)",
         menu_text,
     )
 
+    all_groups = bracket_numbers + inline_numbers
+
     result = set()
 
-    for num_group in numbers:
+    for num_group in all_groups:
         for n in num_group.split("."):
+            n = n.strip()
             if n in ALLERGY_INFO:
                 result.add(n)
 
