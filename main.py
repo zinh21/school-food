@@ -107,6 +107,74 @@ def extract_calorie(value):
 
 
 # =========================================================
+# 알레르기 정보 사전
+# =========================================================
+
+ALLERGY_INFO = {
+    "1": "난류(계란)",
+    "2": "우유",
+    "3": "메밀",
+    "4": "땅콩",
+    "5": "대두",
+    "6": "밀",
+    "7": "고등어",
+    "8": "게",
+    "9": "새우",
+    "10": "돼지고기",
+    "11": "복숭아",
+    "12": "토마토",
+    "13": "아황산류",
+    "14": "호두",
+    "15": "닭고기",
+    "16": "쇠고기",
+    "17": "오징어",
+    "18": "조개류(굴, 전복, 홍합 포함)",
+    "19": "잣",
+}
+
+
+def extract_allergy_numbers(menu_text):
+    """
+    메뉴 텍스트에서 알레르기 번호를 추출합니다.
+    예: '돈까스1.5.6.10' -> {'1', '5', '6', '10'}
+    """
+
+    if not menu_text:
+        return set()
+
+    numbers = re.findall(
+        r"(?<=[가-힣a-zA-Z\)\]])(\d{1,2}(?:\.\d{1,2})*)",
+        menu_text,
+    )
+
+    result = set()
+
+    for num_group in numbers:
+        for n in num_group.split("."):
+            if n in ALLERGY_INFO:
+                result.add(n)
+
+    return result
+
+
+def get_allergy_summary(df):
+    """
+    급식 데이터프레임에서 등장하는 모든 알레르기 번호를 모아서
+    정렬된 리스트로 반환합니다.
+    """
+
+    all_numbers = set()
+
+    for menu in df["메뉴"]:
+        for line in str(menu).split("\n"):
+            all_numbers.update(extract_allergy_numbers(line))
+
+    sorted_numbers = sorted(all_numbers, key=lambda x: int(x))
+
+    return sorted_numbers
+
+
+# =========================================================
 # NEIS API 호출 (에러 원인을 자세히 보여주는 버전)
 # =========================================================
 
@@ -170,7 +238,6 @@ def get_meals(school_name, start_date, end_date):
         code = data["RESULT"].get("CODE", "알 수 없음")
         message = data["RESULT"].get("MESSAGE", "알 수 없음")
 
-        # 데이터가 단순히 없는 경우 (정상적인 상황이므로 에러 표시 안 함)
         if code == "INFO-200":
             return pd.DataFrame()
 
@@ -269,6 +336,23 @@ st.markdown(
     .calorie {
         color: #666;
         margin-top: 12px;
+    }
+    .allergy-card {
+        background: #fff5f5;
+        border: 1px solid #ffd6d6;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    .allergy-number {
+        font-size: 22px;
+        font-weight: 700;
+        color: #d64545;
+    }
+    .allergy-name {
+        font-size: 15px;
+        margin-top: 4px;
     }
     </style>
     """,
@@ -459,19 +543,69 @@ else:
 
 
 # =========================================================
-# 알레르기 정보
+# 알레르기 정보 (개선 버전)
 # =========================================================
 
-with st.expander("ℹ️ 알레르기 번호 보는 법"):
+st.divider()
+st.subheader("🚨 알레르기 정보")
+
+if today_df.empty:
+    st.info("오늘 급식 데이터가 없어 알레르기 정보를 분석할 수 없습니다.")
+
+else:
+    today_allergy_numbers = get_allergy_summary(today_df)
+
+    if not today_allergy_numbers:
+        st.success("오늘 급식 메뉴에서 알레르기 표기 번호를 찾지 못했습니다.")
+
+    else:
+        st.markdown("#### 📌 오늘 급식에 포함된 알레르기 유발 식품")
+
+        cols = st.columns(4)
+
+        for i, num in enumerate(today_allergy_numbers):
+            food_name = ALLERGY_INFO.get(num, "알 수 없음")
+
+            with cols[i % 4]:
+                st.markdown(
+                    f"""
+                    <div class="allergy-card">
+                        <div class="allergy-number">{num}</div>
+                        <div class="allergy-name">{food_name}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+
+with st.expander("ℹ️ 알레르기 번호 전체표 보기 (1~19번)"):
+
     st.markdown(
         """
-        NEIS 급식 메뉴에는 음식 뒤에 알레르기 번호가 붙어 있을 수 있습니다.
+        NEIS 급식 메뉴에는 음식 뒤에 아래와 같은 알레르기 번호가
+        붙어 있을 수 있습니다.
 
-        예: `돈까스1.5.6.10`
+        예: `돈까스1.5.6.10` → 난류, 대두, 밀, 돼지고기 포함
+        """
+    )
 
-        같은 형태라면 해당 음식에 알레르기 유발 식품이 포함될 수 있다는 의미입니다.
+    allergy_df = pd.DataFrame(
+        [
+            {"번호": num, "알레르기 유발 식품": name}
+            for num, name in ALLERGY_INFO.items()
+        ]
+    )
 
-        **알레르기가 있는 경우 반드시 학교에서 제공하는 공식 알레르기 정보를 함께 확인하세요.**
+    st.dataframe(
+        allergy_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown(
+        """
+        **알레르기가 있는 경우 반드시 학교에서 제공하는
+        공식 알레르기 정보를 함께 확인하세요.**
         """
     )
 
