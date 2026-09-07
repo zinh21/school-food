@@ -24,7 +24,7 @@ st.set_page_config(
 # =========================================================
 
 SCHOOLS = {
-    "당곡고등학교": ("B10", "7010536"),
+    "당곡고등학교": ("B10", "7010073"),
 }
 
 API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
